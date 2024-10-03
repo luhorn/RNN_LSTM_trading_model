@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import math
 import h5py
-import fix_yahoo_finance as yf
+import yfinance as yf
 pd.core.common.is_list_like = pd.api.types.is_list_like
 import pandas_datareader.data as pdr
 from time import sleep
@@ -21,15 +21,15 @@ from itertools import chain
 from sklearn.cluster import KMeans
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
-from mpl_finance import candlestick_ohlc
+from mplfinance.original_flavor import candlestick_ohlc
 import copy
 from matplotlib.dates import (DateFormatter, WeekdayLocator, DayLocator, MONDAY)
 
 import keras
 from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Activation
-from keras.layers.recurrent import LSTM
-from keras.layers.recurrent import GRU
+from keras.layers import Dense, Dropout, Activation
+from keras.layers import LSTM
+from keras.layers import GRU
 from keras.callbacks import ModelCheckpoint, EarlyStopping, Callback, TensorBoard
 from keras.models import load_model
 from keras.layers import Dense, Dropout, Activation, Flatten, Reshape
@@ -39,12 +39,12 @@ from keras import backend as K
 # ------------------------- GLOBAL PARAMETERS -------------------------
 
 # Range of date
-START = dt(2000, 1, 1)
-END = dt(2018, 12, 7)
+START = dt(2020, 10, 5)
+END = dt(2024, 10, 2)
 PREDICTION_AHEAD = 1
 TRAIN_PORTION = 0.9
 # simple early stopping
-es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=40)
+es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=250)
 tbd = TensorBoard(log_dir='./tensorboard_logs', histogram_freq=1, embeddings_freq=1)
 # ------------------------------ CLASSES ---------------------------------
 
@@ -226,7 +226,7 @@ class FeatureSelector():
         self.corr_matrix = corr_matrix
 
         # Extract the upper triangle of the correlation matrix
-        upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(np.bool))
+        upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
 
         # Select the features with correlations above the threshold
         # Need to use the absolute value
@@ -250,7 +250,8 @@ class FeatureSelector():
                                               'corr_value': corr_values})
 
             # Add to dataframe
-            record_collinear = record_collinear.append(temp_df, ignore_index=True)
+            # record_collinear = record_collinear.append(temp_df, ignore_index=True)  # DEPRECATED
+            record_collinear = pd.concat([record_collinear, temp_df], ignore_index=True)
 
         self.record_collinear = record_collinear
         self.ops['collinear'] = to_drop
@@ -324,10 +325,10 @@ class FeatureSelector():
         for _ in range(n_iterations):
 
             if task == 'classification':
-                model = lgb.LGBMClassifier(n_estimators=1000, learning_rate=0.05, verbose=0)
+                model = lgb.LGBMClassifier(n_estimators=1000, learning_rate=0.05, verbose=0, early_stopping_rounds=250)
 
             elif task == 'regression':
-                model = lgb.LGBMRegressor(n_estimators=1000, learning_rate=0.05, verbose=0)
+                model = lgb.LGBMRegressor(n_estimators=1000, learning_rate=0.05, verbose=0, early_stopping_rounds=250)
 
             else:
                 raise ValueError('Task must be either "classification" or "regression"')
@@ -339,8 +340,7 @@ class FeatureSelector():
                                                                                               test_size=0.15)
                 # Train the model with early stopping
                 model.fit(train_features, train_labels, eval_metric=eval_metric,
-                          eval_set=[(valid_features, valid_labels)],
-                          early_stopping_rounds=100, verbose=0)
+                          eval_set=[(valid_features, valid_labels)])
 
                 # Clean up memory
                 gc.enable()
@@ -727,10 +727,11 @@ class UserInput:
                         print ("Please wait, checking stock symbol's validity ...")
                         try:
                             # Check if data is available for this stock
-                            daily_data = pdr.get_data_yahoo(symbol, START, END)
+                            daily_data = yf.download(symbol, START, END, interval='1d')
+                            # daily_data = pdr.get_data_yahoo(symbol, START, END)
                         except:
                             pass
-                        if len(daily_data) > 4700:
+                        if len(daily_data) > 720:
                             print ("Great, you have entered a valid stock symbol: {}".format(symbol))
                             validity = True
                         else:
@@ -765,8 +766,7 @@ class Data:
         while not flag and counter < 6:
             try:
                 # Define data range
-                yf.pdr_override()
-                self.daily_data = pdr.get_data_yahoo(self.q, START, END)
+                self.daily_data = yf.download(self.q, START, END, interval='1d')
                 flag = True
 
             except:
@@ -901,7 +901,7 @@ class Models:
         model.add(Dense(1))
         # optimizer = keras.optimizers.Adam(lr=0.00005, beta_1=0.9, beta_2=0.999, epsilon=1e-08)
         # optimizer = keras.optimizers.Adam(lr=0.00001)
-        optimizer = keras.optimizers.Adagrad(lr=0.01, epsilon=1e-08, decay=0.0002)
+        optimizer = keras.optimizers.Adagrad(learning_rate=0.01, epsilon=1e-08, weight_decay=0.0002)
         #optimizer = keras.optimizers.RMSprop(lr=0.01, rho=0.9, epsilon=1e-08, decay=0.0002)
         model.compile(loss='mae', optimizer=optimizer, metrics=['mse', 'mae'])
         model.summary()
@@ -924,7 +924,7 @@ class Models:
                        bias_initializer='zeros'))
         model.add(Dropout(0.25))
         model.add(Dense(1))
-        optimizer = keras.optimizers.RMSprop(lr=0.01, rho=0.9, epsilon=1e-08, decay=0.0002)
+        optimizer = keras.optimizers.RMSprop(learning_rate=0.01, rho=0.9, epsilon=1e-08, weight_decay=0.0002)
         # optimizer = keras.optimizers.Adagrad(lr=0.03, epsilon=1e-08, decay=0.00002)
         # optimizer = keras.optimizers.Adam(lr=0.0001)
         # optimizer = keras.optimizers.Nadam(lr=0.0002, beta_1=0.9, beta_2=0.999, schedule_decay=0.004)
@@ -958,10 +958,10 @@ class Training:
         pre_trained = False
         if model_type == "LSTM":
             batch_size = 4
-            mc = ModelCheckpoint('best_lstm_model_{}.h5'.format(symbol), monitor='val_loss', save_weights_only=False,
+            mc = ModelCheckpoint('best_lstm_model_{}.keras'.format(symbol), monitor='val_loss', save_weights_only=False,
                                  mode='min', verbose=1, save_best_only=True)
             try:
-                model = load_model('./best_lstm_model_{}.h5'.format(symbol))
+                model = load_model('./best_lstm_model_{}.keras'.format(symbol))
                 print("Loading pre-saved model ...")
                 pre_trained = True
             except:
@@ -969,10 +969,10 @@ class Training:
                 pass
         elif model_type == "CNN":
             batch_size = 8
-            mc = ModelCheckpoint('best_cnn_model_{}.h5'.format(symbol), monitor='val_loss', save_weights_only=False,
+            mc = ModelCheckpoint('best_cnn_model_{}.keras'.format(symbol), monitor='val_loss', save_weights_only=False,
                                  mode='min', verbose=1, save_best_only=True)
             try:
-                model = load_model('./best_cnn_model_{}.h5'.format(symbol))
+                model = load_model('./best_cnn_model_{}.keras'.format(symbol))
                 print("Loading pre-saved model ...")
                 pre_trained = True
             except:
@@ -996,9 +996,9 @@ class Training:
                 callbacks=[es, mc])
 
             if model_type == "LSTM":
-                model.save('./best_lstm_model_{}.h5'.format(symbol))
+                model.save('./best_lstm_model_{}.keras'.format(symbol))
             elif model_type == "CNN":
-                model.save('./best_cnn_model_{}.h5'.format(symbol))
+                model.save('./best_cnn_model_{}.keras'.format(symbol))
 
         elif pre_trained:
             history = []
