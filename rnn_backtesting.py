@@ -5,7 +5,7 @@ import math
 from datetime import timedelta
 from calendar import isleap
 #import h5py
-import fix_yahoo_finance as yf
+import yfinance as yf
 pd.core.common.is_list_like = pd.api.types.is_list_like
 import pandas_datareader.data as pdr
 from time import sleep
@@ -28,7 +28,7 @@ import gc
 from itertools import chain
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
-from mpl_finance import candlestick_ohlc
+from mplfinance.original_flavor import candlestick_ohlc
 import copy
 from matplotlib.dates import (DateFormatter, WeekdayLocator, DayLocator, MONDAY)
 
@@ -39,9 +39,9 @@ from keras import backend as K
 # ------------------------- GLOBAL PARAMETERS -------------------------
 
 # Range of date
-START = dt(2000, 1, 1)
-END = dt(2017, 2, 11)
-END_2 = dt(2018, 12, 15)
+START = dt(2010, 10, 5)
+END = dt(2023, 10, 2)
+END_2 = dt(2024, 10, 2)
 
 START_DATE_RANGE = []
 END_DATA_RANGE = []
@@ -118,7 +118,7 @@ class Data:
         print("Test label data shape:", self.test_y.shape)
 
     def get_prediction(self):
-        model_lstm = keras.models.load_model('./best_lstm_model_AAPL_strange.h5')
+        model_lstm = keras.models.load_model('./best_lstm_model_AAPL.keras')
         # Get the predicted price
         self.predicted_y_lstm = model_lstm.predict(self.test_X, batch_size=None, verbose=0, steps=None)
         # Get the trained price
