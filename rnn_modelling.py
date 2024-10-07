@@ -32,14 +32,14 @@ from keras.layers import LSTM
 from keras.layers import GRU
 from keras.callbacks import ModelCheckpoint, EarlyStopping, Callback, TensorBoard
 from keras.models import load_model
-from keras.layers import Dense, Dropout, Activation, Flatten, Reshape
+from keras.layers import Dense, Dropout, Activation, Flatten, Reshape, Bidirectional
 from keras.layers import Conv1D, MaxPooling1D, LeakyReLU, PReLU, GlobalAveragePooling1D
 from keras import regularizers
 from keras import backend as K
 # ------------------------- GLOBAL PARAMETERS -------------------------
 
 # Range of date
-START = dt(2020, 10, 5)
+START = dt(2010, 10, 5)
 END = dt(2024, 10, 2)
 PREDICTION_AHEAD = 1
 TRAIN_PORTION = 0.9
@@ -881,29 +881,57 @@ class Models:
     def build_cnn_model(train_X):
         print("\n")
         print("CNN + RNN LSTM model architecture ")
+        # model = Sequential()
+        # model.add(Conv1D(activation='linear',
+        #                      kernel_initializer='uniform',
+        #                      bias_initializer='zeros',
+        #                      input_shape=(train_X.shape[1], train_X.shape[2]),
+        #                      #kernel_regularizer=regularizers.l2(0.0001),
+        #                      #activity_regularizer=regularizers.l1(0.0001),
+        #                      filters=256, kernel_size=8))
+        # model.add(Conv1D(activation='linear',
+        #                      kernel_initializer='uniform',
+        #                      bias_initializer='zeros', filters=256, kernel_size=6))
+        # model.add(Dropout(0.25))
+        # model.add(MaxPooling1D(3))
+        # model.add(LSTM(128,
+        #                    kernel_initializer='uniform',
+        #                    bias_initializer='zeros'))
+        # model.add(Dropout(0.25))
+        # model.add(Dense(1))
+        # # optimizer = keras.optimizers.Adam(lr=0.00005, beta_1=0.9, beta_2=0.999, epsilon=1e-08)
+        # # optimizer = keras.optimizers.Adam(lr=0.00001)
+        # optimizer = keras.optimizers.Adagrad(learning_rate=0.01, epsilon=1e-08, decay=0.0002)
+        # #optimizer = keras.optimizers.RMSprop(lr=0.01, rho=0.9, epsilon=1e-08, decay=0.0002)
+        # model.compile(loss='mae', optimizer=optimizer, metrics=['mse', 'mae'])
+        # model.summary()
+
+        # return model
+
         model = Sequential()
-        model.add(Conv1D(activation='linear',
-                             kernel_initializer='uniform',
-                             bias_initializer='zeros',
-                             input_shape=(train_X.shape[1], train_X.shape[2]),
-                             #kernel_regularizer=regularizers.l2(0.0001),
-                             #activity_regularizer=regularizers.l1(0.0001),
-                             filters=256, kernel_size=8))
-        model.add(Conv1D(activation='linear',
-                             kernel_initializer='uniform',
-                             bias_initializer='zeros', filters=256, kernel_size=6))
-        model.add(Dropout(0.25))
-        model.add(MaxPooling1D(3))
-        model.add(LSTM(128,
-                           kernel_initializer='uniform',
-                           bias_initializer='zeros'))
-        model.add(Dropout(0.25))
-        model.add(Dense(1))
-        # optimizer = keras.optimizers.Adam(lr=0.00005, beta_1=0.9, beta_2=0.999, epsilon=1e-08)
-        # optimizer = keras.optimizers.Adam(lr=0.00001)
-        optimizer = keras.optimizers.Adagrad(learning_rate=0.01, epsilon=1e-08, weight_decay=0.0002)
-        #optimizer = keras.optimizers.RMSprop(lr=0.01, rho=0.9, epsilon=1e-08, decay=0.0002)
+    
+        # First Conv1D Layer (increase filters)
+        model.add(Conv1D(filters=512, kernel_size=8, activation='linear', kernel_initializer='uniform', bias_initializer='zeros', input_shape=(train_X.shape[1], train_X.shape[2])))
+        model.add(Conv1D(filters=512, kernel_size=6, activation='linear', kernel_initializer='uniform', bias_initializer='zeros'))
+        model.add(Conv1D(filters=256, kernel_size=4, activation='linear', kernel_initializer='uniform', bias_initializer='zeros'))
+        model.add(Dropout(0.3))  # Increased dropout to avoid overfitting
+        model.add(MaxPooling1D(pool_size=2))  # Reduced pooling size for finer feature retention
+        model.add(Bidirectional(LSTM(units=256, return_sequences=True, kernel_initializer='uniform', bias_initializer='zeros')))
+        model.add(LSTM(units=512, return_sequences=True, kernel_initializer='uniform', bias_initializer='zeros'))
+        model.add(Dropout(0.2))  # Add dropout after LSTM layers to further regularize
+        model.add(LSTM(units=512, return_sequences=True, kernel_initializer='uniform', bias_initializer='zeros'))
+        model.add(Dropout(0.2))  # Add dropout after LSTM layers to further regularize
+        model.add(LSTM(units=128, return_sequences=False, kernel_initializer='uniform', bias_initializer='zeros'))
+        model.add(Dropout(0.2))  # Add dropout after LSTM layers to further regularize
+        model.add(Dense(units=64, activation='relu', kernel_initializer='uniform'))
+        model.add(Dense(units=1))  # Final output
+
+        # Optimizer
+        optimizer =  keras.optimizers.Adagrad(learning_rate=0.01, epsilon=1e-08, decay=0.0002)
+
+        # Compile the model
         model.compile(loss='mae', optimizer=optimizer, metrics=['mse', 'mae'])
+        
         model.summary()
 
         return model
@@ -924,7 +952,7 @@ class Models:
                        bias_initializer='zeros'))
         model.add(Dropout(0.25))
         model.add(Dense(1))
-        optimizer = keras.optimizers.RMSprop(learning_rate=0.01, rho=0.9, epsilon=1e-08, weight_decay=0.0002)
+        optimizer = keras.optimizers.RMSprop(learning_rate=0.01, rho=0.9, epsilon=1e-08, decay=0.0002)
         # optimizer = keras.optimizers.Adagrad(lr=0.03, epsilon=1e-08, decay=0.00002)
         # optimizer = keras.optimizers.Adam(lr=0.0001)
         # optimizer = keras.optimizers.Nadam(lr=0.0002, beta_1=0.9, beta_2=0.999, schedule_decay=0.004)
@@ -987,7 +1015,7 @@ class Training:
             history = model.fit(
                 train_X,
                 train_y,
-                epochs=500,
+                epochs=200,
                 batch_size=batch_size,
                 validation_split=0.2,
                 verbose=2,
