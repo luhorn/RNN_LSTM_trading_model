@@ -1,0 +1,5 @@
+.venv
+*.png
+*.h5
+*.keras
+*.sh
